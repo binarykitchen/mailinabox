@@ -19,10 +19,9 @@ echo "Installing Nextcloud (contacts/calendar)..."
 #   for whether it supports the version of PHP available on this machine.
 # * Since Nextcloud only supports upgrades from consecutive major versions,
 #   we automatically install intermediate versions as needed.
-# * The hash is the SHA1 hash of the ZIP package, which you can find by just running this script and
-#   copying it from the error message when it doesn't match what is below.
-nextcloud_ver=26.0.13
-nextcloud_hash=d5c10b650e5396d5045131c6d22c02a90572527c
+# * The hash can be SHA1 or SHA256 of the ZIP package.
+nextcloud_ver=33.0.2
+nextcloud_hash=57e083874459ccb0214e36aaba1c1aa4d0f9ff72e623cb9c777c46d4dd513153
 
 # Nextcloud apps
 # --------------
@@ -36,16 +35,16 @@ nextcloud_hash=d5c10b650e5396d5045131c6d22c02a90572527c
 # the error message when it doesn't match what is below:
 
 # Always ensure the versions are supported, see https://apps.nextcloud.com/apps/contacts
-contacts_ver=5.5.3
-contacts_hash=799550f38e46764d90fa32ca1a6535dccd8316e5
+contacts_ver=8.4.4
+contacts_hash=16c2752b8ae42689dfd1a4f43c8b14a52bca6571
 
 # Always ensure the versions are supported, see https://apps.nextcloud.com/apps/calendar
-calendar_ver=4.7.6
-calendar_hash=a995bca4effeecb2cab25f3bbeac9bfe05fee766
+calendar_ver=6.2.2
+calendar_hash=4b7004d88fd44cceaf2a6096542a3b049eed64ef
 
 # Always ensure the versions are supported, see https://apps.nextcloud.com/apps/user_external
-user_external_ver=3.3.0
-user_external_hash=280d24eb2a6cb56b4590af8847f925c28d8d853e
+user_external_ver=4.0.0
+user_external_hash=214497dd8691f279ba3740797c565310f0793054
 
 # Developer advice (test plan)
 # ----------------------------
@@ -171,9 +170,48 @@ else
 	CURRENT_NEXTCLOUD_VER=""
 fi
 
+DEBUG_NEXTCLOUD=0
+case "${DEBUG:-}" in
+	1|true|TRUE|yes|YES|on|ON)
+		DEBUG_NEXTCLOUD=1
+		;;
+esac
+
+if [ -t 1 ]; then
+	NC_CLR_RESET=$'\033[0m'
+	NC_CLR_TITLE=$'\033[1;36m'
+	NC_CLR_INFO=$'\033[0;34m'
+	NC_CLR_WARN=$'\033[1;33m'
+	NC_CLR_OK=$'\033[0;32m'
+else
+	NC_CLR_RESET=""
+	NC_CLR_TITLE=""
+	NC_CLR_INFO=""
+	NC_CLR_WARN=""
+	NC_CLR_OK=""
+fi
+
 # If the Nextcloud directory is missing (never been installed before, or the nextcloud version to be installed is different
 # from the version currently installed, do the install/upgrade
 if [ ! -d /usr/local/lib/owncloud/ ] || [[ ! ${CURRENT_NEXTCLOUD_VER} =~ ^$nextcloud_ver ]]; then
+	echo
+	printf "%s================ Nextcloud Upgrade Preflight ================%s\n" "$NC_CLR_TITLE" "$NC_CLR_RESET"
+	printf "%sCurrent:%s %s\n" "$NC_CLR_INFO" "$NC_CLR_RESET" "${CURRENT_NEXTCLOUD_VER:-not installed}"
+	printf "%sTarget :%s %s\n" "$NC_CLR_INFO" "$NC_CLR_RESET" "$nextcloud_ver"
+	printf "%sApps   :%s contacts=%s calendar=%s user_external=%s\n" "$NC_CLR_INFO" "$NC_CLR_RESET" "$contacts_ver" "$calendar_ver" "$user_external_ver"
+	printf "%sNote   :%s Sequential major upgrades are applied automatically.\n" "$NC_CLR_WARN" "$NC_CLR_RESET"
+	printf "%sBackup :%s A full install+db+config backup is created before migrations.\n" "$NC_CLR_WARN" "$NC_CLR_RESET"
+	if [ "$DEBUG_NEXTCLOUD" -eq 1 ]; then
+		printf "%sDEBUG  :%s enabled\n" "$NC_CLR_OK" "$NC_CLR_RESET"
+		printf "%sDEBUG  :%s php=%s storage=%s\n" "$NC_CLR_OK" "$NC_CLR_RESET" "$PHP_VER" "$STORAGE_ROOT/owncloud"
+		printf "%sDEBUG  :%s nextcloud_hash=%s\n" "$NC_CLR_OK" "$NC_CLR_RESET" "$nextcloud_hash"
+		printf "%sDEBUG  :%s contacts_hash=%s\n" "$NC_CLR_OK" "$NC_CLR_RESET" "$contacts_hash"
+		printf "%sDEBUG  :%s calendar_hash=%s\n" "$NC_CLR_OK" "$NC_CLR_RESET" "$calendar_hash"
+		printf "%sDEBUG  :%s user_external_hash=%s\n" "$NC_CLR_OK" "$NC_CLR_RESET" "$user_external_hash"
+		printf "%sDEBUG  :%s user_external is intentionally skipped on the NC30 step and restored on NC31+.\n" "$NC_CLR_OK" "$NC_CLR_RESET"
+	fi
+	printf "%s==============================================================%s\n" "$NC_CLR_TITLE" "$NC_CLR_RESET"
+	echo
 
 	# Stop php-fpm if running. If they are not running (which happens on a previously failed install), dont bail.
 	service php"$PHP_VER"-fpm stop &> /dev/null || /bin/true
@@ -182,6 +220,14 @@ if [ ! -d /usr/local/lib/owncloud/ ] || [[ ! ${CURRENT_NEXTCLOUD_VER} =~ ^$nextc
 	# Create a backup directory to store the current installation and database to
 	BACKUP_DIRECTORY=$STORAGE_ROOT/owncloud-backup/$(date +"%Y-%m-%d-%T")
 	mkdir -p "$BACKUP_DIRECTORY"
+	printf "%sBackup path:%s %s\n" "$NC_CLR_INFO" "$NC_CLR_RESET" "$BACKUP_DIRECTORY"
+	if [ "$DEBUG_NEXTCLOUD" -eq 1 ]; then
+		printf "%sDEBUG  :%s existing owncloud dir=%s db=%s config=%s\n" \
+			"$NC_CLR_OK" "$NC_CLR_RESET" \
+			"$( [ -d /usr/local/lib/owncloud/ ] && echo yes || echo no )" \
+			"$( [ -e "$STORAGE_ROOT/owncloud/owncloud.db" ] && echo yes || echo no )" \
+			"$( [ -e "$STORAGE_ROOT/owncloud/config.php" ] && echo yes || echo no )"
+	fi
 	if [ -d /usr/local/lib/owncloud/ ]; then
 		echo "Upgrading Nextcloud --- backing up existing installation, configuration, and database to directory to $BACKUP_DIRECTORY..."
 		cp -r /usr/local/lib/owncloud "$BACKUP_DIRECTORY/owncloud-install"
@@ -238,6 +284,40 @@ if [ ! -d /usr/local/lib/owncloud/ ] || [[ ! ${CURRENT_NEXTCLOUD_VER} =~ ^$nextc
         if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^24 ]]; then
 			InstallNextcloud 25.0.7 a5a565c916355005c7b408dd41a1e53505e1a080 5.3.0 4b0a6666374e3b55cfd2ae9b72e1d458b87d4c8c 4.4.2 21a42e15806adc9b2618760ef94f1797ef399e2f 3.2.0 a494073dcdecbbbc79a9c77f72524ac9994d2eec
 			CURRENT_NEXTCLOUD_VER="25.0.7"
+		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^25 ]]; then
+			InstallNextcloud 26.0.13 d5c10b650e5396d5045131c6d22c02a90572527c 5.5.3 799550f38e46764d90fa32ca1a6535dccd8316e5 4.7.6 a995bca4effeecb2cab25f3bbeac9bfe05fee766 3.4.0 7f9d8f4dd6adb85a0e3d7622d85eeb7bfe53f3b4
+			CURRENT_NEXTCLOUD_VER="26.0.13"
+		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^26 ]]; then
+			InstallNextcloud 27.1.11 ffbfd9857bcaaacaea97d709063b7d81132feb41051063ab6c171c95c6daf142 5.5.3 799550f38e46764d90fa32ca1a6535dccd8316e5 4.7.6 a995bca4effeecb2cab25f3bbeac9bfe05fee766 3.4.0 7f9d8f4dd6adb85a0e3d7622d85eeb7bfe53f3b4
+			CURRENT_NEXTCLOUD_VER="27.1.11"
+		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^27 ]]; then
+			InstallNextcloud 28.0.14 593f174f5098c793fb0314fd5847d891ed4e4db908ceba0d4e571544ac855c2d 5.5.3 799550f38e46764d90fa32ca1a6535dccd8316e5 4.7.6 a995bca4effeecb2cab25f3bbeac9bfe05fee766 3.4.0 7f9d8f4dd6adb85a0e3d7622d85eeb7bfe53f3b4
+			CURRENT_NEXTCLOUD_VER="28.0.14"
+		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^28 ]]; then
+			InstallNextcloud 29.0.16 6221c764b63369be6122bc414ee26a25bd9ce466f7d9ab29cd5ddb0c124c8eeb 5.5.3 799550f38e46764d90fa32ca1a6535dccd8316e5 4.7.6 a995bca4effeecb2cab25f3bbeac9bfe05fee766 3.4.0 7f9d8f4dd6adb85a0e3d7622d85eeb7bfe53f3b4
+			CURRENT_NEXTCLOUD_VER="29.0.16"
+		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^29 ]]; then
+			# user_external has no release compatible with Nextcloud 30.
+			sudo -u www-data php"$PHP_VER" /usr/local/lib/owncloud/console.php app:disable user_external || /bin/true
+			InstallNextcloud 30.0.17 da51e17762785a36c1cf3fe2dc96cb356870695e384485e5980395493c15caf9 7.3.17 7b1d3961f9a8c846419e0effb1bd42956ffafe81 5.5.16 fc0e541a1cb072e5ea4842daecde828b5a38443a
+			CURRENT_NEXTCLOUD_VER="30.0.17"
+		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^30 ]]; then
+			InstallNextcloud 31.0.14 6f34d623f7c24c5ecb3c165083ddb5d6a10186dbc2fa73a23efda26ec92091a7 7.3.17 7b1d3961f9a8c846419e0effb1bd42956ffafe81 5.5.16 fc0e541a1cb072e5ea4842daecde828b5a38443a 4.0.0 214497dd8691f279ba3740797c565310f0793054
+			CURRENT_NEXTCLOUD_VER="31.0.14"
+		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^31 ]]; then
+			InstallNextcloud 32.0.8 daf8154272b88093239b4216b7f7fd9ae59dd2e944550b9e40b17843185efdc3 7.3.17 7b1d3961f9a8c846419e0effb1bd42956ffafe81 5.5.16 fc0e541a1cb072e5ea4842daecde828b5a38443a 4.0.0 214497dd8691f279ba3740797c565310f0793054
+			CURRENT_NEXTCLOUD_VER="32.0.8"
+		fi
+		if [[ ${CURRENT_NEXTCLOUD_VER} =~ ^32 ]]; then
+			InstallNextcloud 33.0.2 57e083874459ccb0214e36aaba1c1aa4d0f9ff72e623cb9c777c46d4dd513153 8.4.4 16c2752b8ae42689dfd1a4f43c8b14a52bca6571 6.2.2 4b7004d88fd44cceaf2a6096542a3b049eed64ef 4.0.0 214497dd8691f279ba3740797c565310f0793054
+			CURRENT_NEXTCLOUD_VER="33.0.2"
 		fi
 	fi
 

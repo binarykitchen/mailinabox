@@ -1,35 +1,31 @@
-Mail-in-a-Box Security Guide
-============================
+# Mail-in-a-Box Security Guide
 
-Mail-in-a-Box turns a fresh Ubuntu 22.04 LTS 64-bit machine into a mail server appliance by installing and configuring various components.
+Mail-in-a-Box turns a fresh Ubuntu 26.04 LTS 64-bit machine into a mail server appliance by installing and configuring various components.
 
 This page documents the security posture of Mail-in-a-Box. The term “box” is used below to mean a configured Mail-in-a-Box.
 
-Reporting Security Vulnerabilities
-----------------------------------
+## Reporting Security Vulnerabilities
 
 Security vulnerabilities should be reported to the [project's maintainer](https://joshdata.me) via email.
 
-Threat Model
-------------
+## Threat Model
 
 Nothing is perfectly secure, and an adversary with sufficient resources can always penetrate a system.
 
 The primary goal of Mail-in-a-Box is to make deploying a good mail server easy, so we balance ― as everyone does ― privacy and security concerns with the practicality of actually deploying the system. That means we make certain assumptions about adversaries. We assume that adversaries . . .
 
-* Do not have physical access to the box (i.e., we do not aim to protect the box from physical access).
-* Have not been given Unix accounts on the box (i.e., we assume all users with shell access are trusted).
+- Do not have physical access to the box (i.e., we do not aim to protect the box from physical access).
+- Have not been given Unix accounts on the box (i.e., we assume all users with shell access are trusted).
 
 On the other hand, we do assume that adversaries are performing passive surveillance and, possibly, active man-in-the-middle attacks. And so:
 
-* User credentials are always sent through SSH/TLS, never in the clear, with modern TLS settings.
-* Outbound mail is sent with the highest level of TLS possible.
-* The box advertises its support for [DANE TLSA](https://en.wikipedia.org/wiki/DNS-based_Authentication_of_Named_Entities), when DNSSEC is enabled at the domain name registrar, so that inbound mail is more likely to be transmitted securely.
+- User credentials are always sent through SSH/TLS, never in the clear, with modern TLS settings.
+- Outbound mail is sent with the highest level of TLS possible.
+- The box advertises its support for [DANE TLSA](https://en.wikipedia.org/wiki/DNS-based_Authentication_of_Named_Entities), when DNSSEC is enabled at the domain name registrar, so that inbound mail is more likely to be transmitted securely.
 
 Additional details follow.
 
-User Credentials
-----------------
+## User Credentials
 
 The box's administrator and its (non-administrative) mail users must sometimes communicate their credentials to the box.
 
@@ -37,20 +33,20 @@ The box's administrator and its (non-administrative) mail users must sometimes c
 
 These services are protected by [TLS](https://en.wikipedia.org/wiki/Transport_Layer_Security):
 
-* SMTP Submission (ports 465/587). Mail users submit outbound mail through SMTP with TLS (port 465) or STARTTLS (port 587).
-* IMAP/POP (ports 993, 995). Mail users check for incoming mail through IMAP or POP over TLS.
-* HTTPS (port 443). Webmail, the Exchange/ActiveSync protocol, the administrative control panel, and any static hosted websites are accessed over HTTPS.
+- SMTP Submission (ports 465/587). Mail users submit outbound mail through SMTP with TLS (port 465) or STARTTLS (port 587).
+- IMAP/POP (ports 993, 995). Mail users check for incoming mail through IMAP or POP over TLS.
+- HTTPS (port 443). Webmail, the Exchange/ActiveSync protocol, the administrative control panel, and any static hosted websites are accessed over HTTPS.
 
 The services all follow these rules:
 
-* TLS certificates are generated with 2048-bit RSA keys and SHA-256 fingerprints. The box provides a self-signed certificate by default. The [setup guide](https://mailinabox.email/guide.html) explains how to verify the certificate fingerprint on first login. Users are encouraged to replace the certificate with a proper CA-signed one. ([source](setup/ssl.sh))
-* Only TLSv1.2+ are offered (the older SSL protocols are not offered).
-* We track the [Mozilla Intermediate Ciphers Recommendation](https://wiki.mozilla.org/Security/Server_Side_TLS), balancing security with supporting a wide range of mail clients. Diffie-Hellman ciphers use a 2048-bit key for forward secrecy. For more details, see the [output of SSLyze for these ports](tests/tls_results.txt).
+- TLS certificates are generated with 2048-bit RSA keys and SHA-256 fingerprints. The box provides a self-signed certificate by default. The [setup guide](https://mailinabox.email/guide.html) explains how to verify the certificate fingerprint on first login. Users are encouraged to replace the certificate with a proper CA-signed one. ([source](setup/ssl.sh))
+- Only TLSv1.2+ are offered (the older SSL protocols are not offered).
+- We track the [Mozilla Intermediate Ciphers Recommendation](https://wiki.mozilla.org/Security/Server_Side_TLS), balancing security with supporting a wide range of mail clients. Diffie-Hellman ciphers use a 2048-bit key for forward secrecy. For more details, see the [output of SSLyze for these ports](tests/tls_results.txt).
 
 Additionally:
 
-* SMTP Submission on port 587 will not accept user credentials without STARTTLS (true also of SMTP on port 25 in case of client misconfiguration), and the submission port won't accept mail without encryption. The minimum cipher key length is 128 bits. (The box is of course configured not to be an open relay. User credentials are required to send outbound mail.) ([source](setup/mail-postfix.sh))
-* HTTPS (port 443): The HTTPS Strict Transport Security header is set. A redirect from HTTP to HTTPS is offered. The [Qualys SSL Labs test](https://www.ssllabs.com/ssltest) should report an A+ grade. ([source 1](conf/nginx-ssl.conf), [source 2](conf/nginx.conf))
+- SMTP Submission on port 587 will not accept user credentials without STARTTLS (true also of SMTP on port 25 in case of client misconfiguration), and the submission port won't accept mail without encryption. The minimum cipher key length is 128 bits. (The box is of course configured not to be an open relay. User credentials are required to send outbound mail.) ([source](setup/mail-postfix.sh))
+- HTTPS (port 443): The HTTPS Strict Transport Security header is set. A redirect from HTTP to HTTPS is offered. The [Qualys SSL Labs test](https://www.ssllabs.com/ssltest) should report an A+ grade. ([source 1](conf/nginx-ssl.conf), [source 2](conf/nginx.conf))
 
 ### Password Storage
 
@@ -72,8 +68,7 @@ The following services are protected: SSH, IMAP (dovecot), SMTP submission (post
 
 Some other services running on the box may be missing fail2ban filters.
 
-Outbound Mail
--------------
+## Outbound Mail
 
 The basic protocols of email delivery did not plan for the presence of adversaries on the network. For a number of reasons it is not possible in most cases to guarantee that a connection to a recipient server is secure.
 
@@ -99,8 +94,7 @@ While domain policy records prevent other servers from sending mail with a "From
 
 The box restricts the envelope sender address (also called the return path or MAIL FROM address --- this is different from the "From:" header) that users may put into outbound mail. The envelope sender address must be either their own email address (their SMTP login username) or any alias that they are listed as a permitted sender of. (There is currently no restriction on the contents of the "From:" header.)
 
-Incoming Mail
--------------
+## Incoming Mail
 
 ### Encryption Settings
 
